@@ -1,0 +1,206 @@
+---
+title: "Assigment Writeup"
+author: "Christian Geng"
+date: "09/22/2015"
+output: html_document
+---
+
+# Introduction : Objective
+
+The objective of the project is to build a machine learning model. 
+The dataset is introduced on the webpage [here][1], and references a publication by Ugulino et. al. describing the dataset. It contains raw data and derived data from wearable devices attached to a belt around the waste, the arm, the dumbbell itself and a  glove. The participants were engaged in a fitness  exercise called "Unilateral Dumbbell Biceps Curl" (see Velloso et. al. (2013)).  
+
+The objective of the project is to predict a variable "classe"  in the training set, use cross validation, and give the  expected out of sample error, and motivate the choices. Also, 20 different test cases have to be predicted.  
+
+According to Velloso et. al. (2013), the value "A" in the variable class stands for the correct execution of the training exercise, while the remaing levels  B-E represent common mistakes.
+
+Concerning the predictors, it is probably noteworthy, that we already know the features that were used in Velloso et. al. (2013). These authors used 17 features were selected by an automatic procedure: 
+
+belt(7):  
+
++ mean and variance of the roll,  -    
++ maximum, range and variance of the accelerometer vector,
++ variance of the gyro and 
++ variance of the magnetometer. 
+
+arm (3):  
+
++ variance of the accelerometer vector
++ maximum and minimum of the magnetometer were selected.
+
+
+dumbbell(4):  
+
++ maximum of the acceleration, 
++ variance of the gyro and 
++ maximum and minimum of the magnetometer, 
+
+glove (3):  
+
++ sum of the pitch
++ maximum and minimum of the gyro
+
+# Prepare the Data for Modelling
+
+
+## Load Libs
+
+```{r loadlibs,echo=FALSE,results='hide'}
+library(lattice)
+library(ggplot2)
+#library(randomForest)
+library(caret)
+library(xtable)
+library(plyr)
+
+set.seed(33833)
+```
+
+## Read Training Data and the testing data set
+
+```{r load Data,echo=FALSE,results='markup'}
+indir <- ("/D/myfiles/2015/courseraAppliedMachineLearning/project/")
+source(paste(indir,'functions.r',sep='')) # load additional functions
+datdir <- paste(indir,"/data/",sep="")
+trainingfilename="pml-training.csv"
+#train_data <- read.table(paste(datdir,trainingfilename,sep=""), header=TRUE ,sep=",")
+train_data <- read.table(paste(datdir,trainingfilename,sep=""), header=TRUE ,sep=",",na.strings=c("NA",""))
+
+testingfilename="pml-testing.csv"
+oobdata <- read.table(paste(datdir,testingfilename,sep=""), header=TRUE ,sep=",")
+```
+
+### Remove descriptor variables (first seven variables)
+The first few variables seem to be junk, so remove them
+```{r Remove junk,echo=FALSE,results='markup'}
+  nvarsbefore <- dim(train_data)[2] 
+  train_data <- train_data[-(1:7)]
+  oobdata <- oobdata[-(1:7)]
+  nvarsAfter <- dim(train_data)[2] 
+```
+number of variables before=`r nvarsbefore`, and after: `r nvarsAfter`
+
+### Remove variables with only missing values in the oob test set
+
+I found this on the forum: If the test set (in that case the data that we are supposed to submit through the Coursera Submission system) contains variables that are missing for all cases, then you do not need to build a model on the training data containing them.
+
+```{r Remove oob missing vars,echo=FALSE,results='markup'}
+source(paste(indir,'functions.r',sep=''));
+test = rmMissing4allcases(oobdata)
+logicalVector <- apply(!is.na(oobdata),2,sum)== dim(oobdata)[1] # all vars that do not have missing everywhere
+nvarsbefore <- dim(train_data)[2] 
+train_data  <- train_data[,logicalVector]
+nvarsAfter <- dim(train_data)[2] 
+```
+number of variables before=`r nvarsbefore`, and after: `r nvarsAfter`
+
+## Split data into:Training and Testing
+A separate validation data partition is not generated. 
+
+```{r ncasesSplit, echo=FALSE}
+  puse = .3
+  TrainPercent <- puse*100
+  inTrain = createDataPartition(train_data$classe, p = puse)[[1]]
+  traininguse = train_data[ inTrain,]
+  testinguse = train_data[-inTrain,]
+  ncasesTrain <- dim(traininguse)[1]
+  ncasesTest <- dim(testinguse)[1]
+  ncasesAll <-dim(train_data)[1]
+  #nvarsAfter <- dim(traininguse)[2] 
+```
+The total data set contains `r ncasesAll`
+There was some discussion about this issue in the forum.
+For memory reasons, I used `r TrainPercent`% of the data in the training set.
+I am following this procedure, and  will concentrate on variable selection. 
+This results in a split containing `r ncasesTrain` in the training data set and `r ncasesTest` in the test data set.
+
+
+
+
+## Eliminate data with near zero variance
+
+It is not advisable to retain variables that have almost zero variance. 
+I am applying this procedure only to the numeric variables. 
+
+
+```{r eliminate zero variance}
+  #nsv <- nearZeroVar(train_data,saveMetrics=TRUE)
+  #dim(nsv)
+  #nsv <- nearZeroVar(train_data[sapply(train_data,is.numeric),],saveMetrics=TRUE)
+  #numericdata <- train_data[,nearZeroVar(train_data[sapply(train_data,is.numeric),])]
+
+  nsv <- data.frame(nearZeroVar(traininguse[sapply(traininguse,is.numeric),],saveMetrics=TRUE),sapply(traininguse,class))  
+  nsv <- rename(nsv, c("sapply.traininguse..class."="type"))
+  vars2drop <- row.names(nsv[nsv$type == "numeric" & nsv$nzv == TRUE ,])
+  traininguse <- traininguse[setdiff(names(traininguse),vars2drop)]
+  ndrop <- length(vars2drop)
+  nvarsinmodel <- dim(traininguse)[2]
+```
+
+This allows to drop `r ndrop` variables. The training data will use `r nvarsinmodel` variables.
+
+
+
+# Modelling the Training Set
+
+As they say in the lecture, a random forest should probably be less problematic when it comes to preprocessing: Scaling and centering are not needed. s
+
+```{r model training data}
+
+modelfile <- paste(datdir,"rf_model.RData",sep='')
+load(modelfile)
+
+# MODEL CODE: NOT RUN
+# rf_model<-train(classe~.,data=traininguse,method="rf",
+#                trControl=trainControl(method="cv",number=5),
+#                prox=TRUE,allowParallel=TRUE)
+# save(rf_model,file = modelfile)
+
+print(rf_model)
+varImp(rf_model)
+print(rf_model$finalModel)
+```
+
+# Predicting on the Test Set
+
+```{r predictions on test data}
+  predictions <- predict(rf_model,newdata=testinguse)
+  confmat <- confusionMatrix(predictions,testinguse$classe)
+  acc <-  as.numeric(confmat$overall[1])
+  print(paste("PCA Accuracy TEST Set: ",acc))
+```
+
+# Writing the oob result files for submission
+
+
+
+
+
+# Objective
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+1. Your submission should consist of a **link to a Github repo with your R markdown and compiled HTML file describing your analysis**. Please constrain the text of the writeup to **< 2000 words** and the **number of figures to be less than 5**. It will make it easier for the graders if you **submit a repo with a gh-pages branch** so the HTML page can be viewed online (and you always want to make it easy on graders :-).
+2. You should also **apply your machine learning algorithm to the 20 test cases available in the test data above**. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details. 
+
++ how you built your model
++ how you used cross validation
++ what you think the expected out of sample error
+
+# Notes
+
++ The aim is to predict the variable "classs", where Class A corresponds to the **correct** execution of the exercise, while the other 4 classes correspond to common mistakes.
++ If you look by user and by variable, there are a lot of  significant patterns of missing values.  Imputting around them is a good strategy.
+
+
+
+# References
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013  
+
+# Links
+I spend so much time reading [R bloggers][1] and [Simply Statistics][2]!  
+test [Read mode][1]
+
+[1]: http://groupware.les.inf.puc-rio.br/har#ixzz3mmZGCXOK "data sets"
+[2]: http://simplystatistics.org/ "Simply Statistics"  
