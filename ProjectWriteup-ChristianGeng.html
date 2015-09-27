@@ -72,54 +72,56 @@ img {
 <h1>Introduction : Objective</h1>
 <p>The objective of the project is to build a machine learning model. The dataset is introduced on the webpage <a href="http://groupware.les.inf.puc-rio.br/har#ixzz3mmZGCXOK" title="data sets">here</a>, and references a publication by Ugulino et. al. describing the dataset. It contains raw data and derived data from wearable devices attached to a belt around the waste, the arm, the dumbbell itself and a glove. The participants were engaged in a fitness exercise called “Unilateral Dumbbell Biceps Curl” (see Velloso et. al. (2013)).</p>
 <p>The objective of the project is to predict a variable “classe” in the training set, use cross validation, and give the expected out of sample error, and motivate the choices. Also, 20 different test cases have to be predicted.</p>
-<p>According to Velloso et. al. (2013), the value “A” in the variable class stands for the correct execution of the training exercise, while the remaing levels B-E represent common mistakes.</p>
-<p>Concerning the predictors, it is probably noteworthy, that we already know the features that were used in Velloso et. al. (2013). These authors used 17 features were selected by an automatic procedure:</p>
-<p>belt(7):</p>
-<ul>
-<li>mean and variance of the roll, -<br /></li>
-<li>maximum, range and variance of the accelerometer vector,</li>
-<li>variance of the gyro and</li>
-<li>variance of the magnetometer.</li>
-</ul>
-<p>arm (3):</p>
-<ul>
-<li>variance of the accelerometer vector</li>
-<li>maximum and minimum of the magnetometer were selected.</li>
-</ul>
-<p>dumbbell(4):</p>
-<ul>
-<li>maximum of the acceleration,</li>
-<li>variance of the gyro and</li>
-<li>maximum and minimum of the magnetometer,</li>
-</ul>
-<p>glove (3):</p>
-<ul>
-<li>sum of the pitch</li>
-<li>maximum and minimum of the gyro</li>
-</ul>
 </div>
-<div id="prepare-the-data-for-modelling" class="section level1">
-<h1>Prepare the Data for Modelling</h1>
-<div id="read-data-into-r-recode-the-dependent-as-factor-as-is" class="section level2">
-<h2>Read Data into, R, recode the dependent as factor as is</h2>
+<div id="prepare-r-and-the-dataset-for-modelling" class="section level1">
+<h1>Prepare R and the Dataset for Modelling</h1>
+<p>Load the dataset, the libraries in order to get started …</p>
+<pre class="r"><code>library(lattice)
+library(ggplot2)
+#library(randomForest)
+library(caret)
+library(xtable)
+library(plyr)
+indir &lt;- (&quot;/D/myfiles/2015/courseraAppliedMachineLearning/project/&quot;)
+datdir &lt;- paste(indir,&quot;/data/&quot;,sep=&quot;&quot;)
+source(paste(indir,'functions.r',sep='')) # load additional functions
+set.seed(33833)</code></pre>
 </div>
-<div id="read-training-data-and-the-testing-data-set" class="section level2">
-<h2>Read Training Data and the testing data set</h2>
-<div id="remove-descriptor-variables-first-seven-variables" class="section level3">
-<h3>Remove descriptor variables (first seven variables)</h3>
-<p>The first few variables seem to be junk, so remove them</p>
-<p>number of variables before=160, and after: 153</p>
+<div id="select-variables" class="section level1">
+<h1>Select Variables</h1>
+<div id="remove-descriptor-variables-first-seven-variables" class="section level2">
+<h2>Remove descriptor variables (first seven variables)</h2>
+<p>The first few variables seem to be junk, so remove them:</p>
+<pre class="r"><code>  nvarsbefore &lt;- dim(train_data)[2] 
+  train_data &lt;- train_data[-(1:7)]
+  oobdata &lt;- oobdata[-(1:7)]
+  nvarsAfter &lt;- dim(train_data)[2] </code></pre>
+<p>Check: number of variables before=160, and after: 153.</p>
 </div>
-<div id="remove-variables-with-only-missing-values-in-the-oob-test-set" class="section level3">
-<h3>Remove variables with only missing values in the oob test set</h3>
-<p>I found this on the forum: If the test set (in that case the data that we are supposed to submit through the Coursera Submission system) contains variables that are missing for all cases, then you do not need to build a model on the training data containing them.</p>
-<p>number of variables before=153, and after: 53</p>
-</div>
+<div id="remove-variables-with-only-missing-values-in-the-oob-test-set" class="section level2">
+<h2>Remove variables with only missing values in the oob test set</h2>
+<p>I found this on the forum: If the test set (in that case the data that we are supposed to submit through the Coursera Submission system) contains variables that are missing for all cases, then you do not need to build a model on the training data containing them. So they can go …</p>
+<pre class="r"><code>source(paste(indir,'functions.r',sep=''));
+test = rmMissing4allcases(oobdata)
+logicalVector &lt;- apply(!is.na(oobdata),2,sum)== dim(oobdata)[1] # all vars that do not have missing everywhere
+nvarsbefore &lt;- dim(train_data)[2] 
+train_data  &lt;- train_data[,logicalVector]
+nvarsAfter &lt;- dim(train_data)[2] </code></pre>
+<p>Number of variables before removal: 153 Number of variables before removal: 53</p>
 </div>
 <div id="split-data-intotraining-and-testing" class="section level2">
 <h2>Split data into:Training and Testing</h2>
-<p>A separate validation data partition is not generated.</p>
-<p>The total data set contains 19622 There was some discussion about this issue in the forum. For memory reasons, I used 30% of the data in the training set. I am following this procedure, and will concentrate on variable selection. This results in a split containing 5889 in the training data set and 13733 in the test data set.</p>
+<pre class="r"><code>  puse = .3
+  TrainPercent &lt;- puse*100
+  inTrain = createDataPartition(train_data$classe, p = puse)[[1]]
+  traininguse = train_data[ inTrain,]
+  testinguse = train_data[-inTrain,]
+  ncasesTrain &lt;- dim(traininguse)[1]
+  ncasesTest &lt;- dim(testinguse)[1]
+  ncasesAll &lt;-dim(train_data)[1]
+  #nvarsAfter &lt;- dim(traininguse)[2] </code></pre>
+<p>The total data set contains 19622 There was some discussion about this issue in the forum. For memory reasons, I used 30% of the data in the training set. The results suggest that this works.</p>
+<p>This results of the split contain 5889 in the training data set and 13733 in the test data set.</p>
 </div>
 <div id="eliminate-data-with-near-zero-variance" class="section level2">
 <h2>Eliminate data with near zero variance</h2>
@@ -135,28 +137,23 @@ img {
   traininguse &lt;- traininguse[setdiff(names(traininguse),vars2drop)]
   ndrop &lt;- length(vars2drop)
   nvarsinmodel &lt;- dim(traininguse)[2]</code></pre>
-<p>This allows to drop 0 variables. The training data will use 53 variables.</p>
+<p>This allows to drop 0 variables. The training data will use 53 variables. As it looks, this procedure does not remove any further variables.</p>
 </div>
 </div>
 <div id="modelling-the-training-set" class="section level1">
 <h1>Modelling the Training Set</h1>
-<p>As they say in the lecture, a random forest should probably be less problematic when it comes to preprocessing: Scaling and centering are not needed. s</p>
-<pre class="r"><code>#modelFit &lt;- train(classe~.,data=traininguse1,method=&quot;rf&quot;)
-#varImp(modelFit)
+<p>As they say in the lecture, a random forest should probably be less problematic when it comes to preprocessing: Scaling and centering are not needed. Also the original publication cited does use RF.<br />I have not tried to replace correlated variables by Principal Components.</p>
+<p>I used only a small fraction of the data for training, I use cross validation splitting the data in 5 partitions. I had to limit the amount of training data due to memory limitations (only 30%, see above).<br />Probably one could train with more data by optimizing the settings. But the results were quite good, so this did not seem necessary.</p>
+<pre class="r"><code># load the model from disk instead of running it again
+modelfile &lt;- paste(datdir,&quot;rf_model.RData&quot;,sep='')
+load(modelfile)
 
+# MODEL CODE: NOT RUN
+# rf_model&lt;-train(classe~.,data=traininguse,method=&quot;rf&quot;,
+#                trControl=trainControl(method=&quot;cv&quot;,number=5),
+#                prox=TRUE,allowParallel=TRUE)
+# save(rf_model,file = modelfile)
 
-#load(&quot;rf_model.RData&quot;)
-#print(rf_model)
-
-
-rf_model&lt;-train(classe~.,data=traininguse,method=&quot;rf&quot;,
-                trControl=trainControl(method=&quot;cv&quot;,number=5),
-                prox=TRUE,allowParallel=TRUE)</code></pre>
-<pre><code>## Loading required package: randomForest
-## randomForest 4.6-10
-## Type rfNews() to see new features/changes/bug fixes.
-## Loading required namespace: e1071</code></pre>
-<pre class="r"><code>save(rf_model,file = &quot;rf_model.RData&quot;)
 print(rf_model)</code></pre>
 <pre><code>## Random Forest 
 ## 
@@ -177,6 +174,9 @@ print(rf_model)</code></pre>
 ## Accuracy was used to select the optimal model using  the largest value.
 ## The final value used for the model was mtry = 27.</code></pre>
 <pre class="r"><code>varImp(rf_model)</code></pre>
+<pre><code>## Loading required package: randomForest
+## randomForest 4.6-10
+## Type rfNews() to see new features/changes/bug fixes.</code></pre>
 <pre><code>## rf variable importance
 ## 
 ##   only 20 most important variables shown (out of 52)
@@ -219,25 +219,25 @@ print(rf_model)</code></pre>
 ## D    2    1  27 930    5 0.036269430
 ## E    0    4   5   8 1066 0.015697138</code></pre>
 </div>
-<div id="objective" class="section level1">
-<h1>Objective</h1>
-<p>The goal of your project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.</p>
-<ol style="list-style-type: decimal">
-<li>Your submission should consist of a <strong>link to a Github repo with your R markdown and compiled HTML file describing your analysis</strong>. Please constrain the text of the writeup to <strong>&lt; 2000 words</strong> and the <strong>number of figures to be less than 5</strong>. It will make it easier for the graders if you <strong>submit a repo with a gh-pages branch</strong> so the HTML page can be viewed online (and you always want to make it easy on graders :-).</li>
-<li>You should also <strong>apply your machine learning algorithm to the 20 test cases available in the test data above</strong>. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details.</li>
-</ol>
-<ul>
-<li>how you built your model</li>
-<li>how you used cross validation</li>
-<li>what you think the expected out of sample error</li>
-</ul>
+<div id="predicting-on-the-test-set" class="section level1">
+<h1>Predicting on the Test Set</h1>
+<p>As described above, I have used fairly little data during training.</p>
+<p>I report accuracy values, as we are modelling a qualitative outcome.</p>
+<pre class="r"><code>  predictions &lt;- predict(rf_model,newdata=testinguse)
+  confmat &lt;- confusionMatrix(predictions,testinguse$classe)</code></pre>
+<pre><code>## Loading required namespace: e1071</code></pre>
+<pre class="r"><code>  acc &lt;-  as.numeric(confmat$overall[1])</code></pre>
+<p>** TEST Set Accuracy: 0.9805578 **<br />The cross validation error on the training set above was <strong>0.9764007</strong>. So I can conclude that we got some decent fit.</p>
 </div>
-<div id="notes" class="section level1">
-<h1>Notes</h1>
-<ul>
-<li>The aim is to predict the variable “classs”, where Class A corresponds to the <strong>correct</strong> execution of the exercise, while the other 4 classes correspond to common mistakes.</li>
-<li>If you look by user and by variable, there are a lot of significant patterns of missing values. Imputting around them is a good strategy.</li>
-</ul>
+<div id="writing-the-oob-result-files-for-submission" class="section level1">
+<h1>Writing the oob result files for submission</h1>
+<pre class="r"><code>answers &lt;- predict(rf_model,newdata=oobdata)
+source(paste(indir,'functions.r',sep='')) 
+pml_write_files(answers,datdir)</code></pre>
+</div>
+<div id="observation" class="section level1">
+<h1>Observation</h1>
+<p>Although the results are quite ok, I found it unsatisfactory not to use so little data during training. And I would probably not have made it without the forums.</p>
 </div>
 <div id="references" class="section level1">
 <h1>References</h1>

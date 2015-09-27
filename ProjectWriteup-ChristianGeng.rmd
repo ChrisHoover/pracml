@@ -12,56 +12,25 @@ The dataset is introduced on the webpage [here][1], and references a publication
 
 The objective of the project is to predict a variable "classe"  in the training set, use cross validation, and give the  expected out of sample error, and motivate the choices. Also, 20 different test cases have to be predicted.  
 
-According to Velloso et. al. (2013), the value "A" in the variable class stands for the correct execution of the training exercise, while the remaing levels  B-E represent common mistakes.
 
-Concerning the predictors, it is probably noteworthy, that we already know the features that were used in Velloso et. al. (2013). These authors used 17 features were selected by an automatic procedure: 
+# Prepare R and the Dataset for Modelling
 
-belt(7):  
+Load the dataset, the libraries in order to get started ...
 
-+ mean and variance of the roll,  -    
-+ maximum, range and variance of the accelerometer vector,
-+ variance of the gyro and 
-+ variance of the magnetometer. 
-
-arm (3):  
-
-+ variance of the accelerometer vector
-+ maximum and minimum of the magnetometer were selected.
-
-
-dumbbell(4):  
-
-+ maximum of the acceleration, 
-+ variance of the gyro and 
-+ maximum and minimum of the magnetometer, 
-
-glove (3):  
-
-+ sum of the pitch
-+ maximum and minimum of the gyro
-
-# Prepare the Data for Modelling
-
-
-## Load Libs
-
-```{r loadlibs,echo=FALSE,results='hide'}
+```{r loadlibs,echo=TRUE,results='hide'}
 library(lattice)
 library(ggplot2)
 #library(randomForest)
 library(caret)
 library(xtable)
 library(plyr)
-
+indir <- ("/D/myfiles/2015/courseraAppliedMachineLearning/project/")
+datdir <- paste(indir,"/data/",sep="")
+source(paste(indir,'functions.r',sep='')) # load additional functions
 set.seed(33833)
 ```
 
-## Read Training Data and the testing data set
-
 ```{r load Data,echo=FALSE,results='markup'}
-indir <- ("/D/myfiles/2015/courseraAppliedMachineLearning/project/")
-source(paste(indir,'functions.r',sep='')) # load additional functions
-datdir <- paste(indir,"/data/",sep="")
 trainingfilename="pml-training.csv"
 #train_data <- read.table(paste(datdir,trainingfilename,sep=""), header=TRUE ,sep=",")
 train_data <- read.table(paste(datdir,trainingfilename,sep=""), header=TRUE ,sep=",",na.strings=c("NA",""))
@@ -70,21 +39,25 @@ testingfilename="pml-testing.csv"
 oobdata <- read.table(paste(datdir,testingfilename,sep=""), header=TRUE ,sep=",")
 ```
 
-### Remove descriptor variables (first seven variables)
-The first few variables seem to be junk, so remove them
-```{r Remove junk,echo=FALSE,results='markup'}
+
+
+# Select Variables
+## Remove descriptor variables (first seven variables)
+The first few variables seem to be junk, so remove them:
+```{r Remove junk,echo=TRUE,results='markup'}
   nvarsbefore <- dim(train_data)[2] 
   train_data <- train_data[-(1:7)]
   oobdata <- oobdata[-(1:7)]
   nvarsAfter <- dim(train_data)[2] 
 ```
-number of variables before=`r nvarsbefore`, and after: `r nvarsAfter`
+Check: number of variables before=`r nvarsbefore`, and after: `r nvarsAfter`.
 
-### Remove variables with only missing values in the oob test set
+## Remove variables with only missing values in the oob test set 
 
-I found this on the forum: If the test set (in that case the data that we are supposed to submit through the Coursera Submission system) contains variables that are missing for all cases, then you do not need to build a model on the training data containing them.
+I found this on the forum: If the test set (in that case the data that we are supposed to submit through the Coursera Submission system) contains variables that are missing for all cases, then you do not need to build a model on the training data containing them. So they can go ...
 
-```{r Remove oob missing vars,echo=FALSE,results='markup'}
+
+```{r Remove oob missing vars,echo=TRUE,results='markup'}
 source(paste(indir,'functions.r',sep=''));
 test = rmMissing4allcases(oobdata)
 logicalVector <- apply(!is.na(oobdata),2,sum)== dim(oobdata)[1] # all vars that do not have missing everywhere
@@ -92,12 +65,13 @@ nvarsbefore <- dim(train_data)[2]
 train_data  <- train_data[,logicalVector]
 nvarsAfter <- dim(train_data)[2] 
 ```
-number of variables before=`r nvarsbefore`, and after: `r nvarsAfter`
+Number of variables before removal: `r nvarsbefore`
+Number of variables before removal: `r nvarsAfter`
 
 ## Split data into:Training and Testing
-A separate validation data partition is not generated. 
 
-```{r ncasesSplit, echo=FALSE}
+
+```{r ncasesSplit, echo=TRUE}
   puse = .3
   TrainPercent <- puse*100
   inTrain = createDataPartition(train_data$classe, p = puse)[[1]]
@@ -111,9 +85,9 @@ A separate validation data partition is not generated.
 The total data set contains `r ncasesAll`
 There was some discussion about this issue in the forum.
 For memory reasons, I used `r TrainPercent`% of the data in the training set.
-I am following this procedure, and  will concentrate on variable selection. 
-This results in a split containing `r ncasesTrain` in the training data set and `r ncasesTest` in the test data set.
+The results suggest that this works.   
 
+This results of the split contain  `r ncasesTrain` in the training data set and `r ncasesTest` in the test data set.   
 
 
 
@@ -137,16 +111,22 @@ I am applying this procedure only to the numeric variables.
   nvarsinmodel <- dim(traininguse)[2]
 ```
 
-This allows to drop `r ndrop` variables. The training data will use `r nvarsinmodel` variables.
-
-
+This allows to drop `r ndrop` variables. The training data will use `r nvarsinmodel` variables. As it looks, this procedure does not remove 
+any further variables. 
 
 # Modelling the Training Set
 
-As they say in the lecture, a random forest should probably be less problematic when it comes to preprocessing: Scaling and centering are not needed. s
+As they say in the lecture, a random forest should probably be less problematic when it comes to preprocessing: Scaling and centering are not needed. 
+Also the original publication cited does use RF.   
+I have not tried to replace correlated variables by Principal Components.    
+
+I used only a small fraction of the data for training, I use cross validation splitting the data in 5 partitions. 
+I had to limit the amount of training data due to memory limitations (only 30%, see above).  
+Probably one could train with more data by optimizing the settings. But the results were quite good, so this did not seem necessary. 
+
 
 ```{r model training data}
-
+# load the model from disk instead of running it again
 modelfile <- paste(datdir,"rf_model.RData",sep='')
 load(modelfile)
 
@@ -163,35 +143,33 @@ print(rf_model$finalModel)
 
 # Predicting on the Test Set
 
+As described above, I have used fairly little data during training.  
+
+I report accuracy values, as we are modelling a qualitative outcome. 
+
+
 ```{r predictions on test data}
   predictions <- predict(rf_model,newdata=testinguse)
   confmat <- confusionMatrix(predictions,testinguse$classe)
   acc <-  as.numeric(confmat$overall[1])
-  print(paste("PCA Accuracy TEST Set: ",acc))
 ```
+** TEST Set  Accuracy: `r acc` **  
+The cross validation error on the training set above was **0.9764007**.
+So I can conclude that we got some decent fit.
 
 # Writing the oob result files for submission
 
+```{r oob data predictions}
+answers <- predict(rf_model,newdata=oobdata)
+source(paste(indir,'functions.r',sep='')) 
+pml_write_files(answers,datdir)
+```
 
 
 
+# Observation
 
-# Objective
-The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
-
-1. Your submission should consist of a **link to a Github repo with your R markdown and compiled HTML file describing your analysis**. Please constrain the text of the writeup to **< 2000 words** and the **number of figures to be less than 5**. It will make it easier for the graders if you **submit a repo with a gh-pages branch** so the HTML page can be viewed online (and you always want to make it easy on graders :-).
-2. You should also **apply your machine learning algorithm to the 20 test cases available in the test data above**. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details. 
-
-+ how you built your model
-+ how you used cross validation
-+ what you think the expected out of sample error
-
-# Notes
-
-+ The aim is to predict the variable "classs", where Class A corresponds to the **correct** execution of the exercise, while the other 4 classes correspond to common mistakes.
-+ If you look by user and by variable, there are a lot of  significant patterns of missing values.  Imputting around them is a good strategy.
-
-
+Although the results are quite ok, I found it unsatisfactory not to use so little data during training. And I would probably not have made it without the forums. 
 
 # References
 Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6
