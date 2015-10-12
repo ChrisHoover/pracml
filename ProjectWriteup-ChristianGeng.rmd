@@ -5,6 +5,9 @@ date: "09/22/2015"
 output: html_document
 ---
 
+# Let's do some looney changes!
+
+
 # Introduction : Objective
 
 The objective of the project is to build a machine learning model. 
